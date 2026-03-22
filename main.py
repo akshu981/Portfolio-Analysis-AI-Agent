@@ -625,58 +625,86 @@ def validate_key(payload: dict):
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(req: AnalyzeRequest):
-    """
-    Full pipeline:
-      1. Validate dates
-      2. Fetch both 13F filings from SEC EDGAR
-      3. Compare holdings + calculate metrics
-      4. Enrich with sector data (SEC-only, no external APIs)
-      5. Ask Gemini the user's question
-      6. Return answer + summary
-    """
-    # Validate date ordering
-    if req.period_prev >= req.period_curr:
-        raise HTTPException(
-            status_code=400,
-            detail="period_curr must be later than period_prev"
+    try:
+        print("=== /analyze called ===")
+        print(f"CIK: {req.cik}")
+        print(f"period_prev: {req.period_prev}")
+        print(f"period_curr: {req.period_curr}")
+        print(f"question: {req.question}")
+
+        # Validate date ordering
+        if req.period_prev >= req.period_curr:
+            raise HTTPException(
+                status_code=400,
+                detail="period_curr must be later than period_prev"
+            )
+
+        headers = make_headers(req.sec_email)
+        print("Headers created")
+
+        # --- Step 1: Extract holdings ---
+        print("Starting old period extraction")
+        old_df = extract_13f_data(req.cik, req.period_prev, headers)
+        print(f"Old period extraction done: {len(old_df)} rows")
+
+        time.sleep(1)
+
+        print("Starting current period extraction")
+        new_df = extract_13f_data(req.cik, req.period_curr, headers)
+        print(f"Current period extraction done: {len(new_df)} rows")
+
+        # --- Step 2: Compare + metrics ---
+        print("Starting comparison")
+        comparison_df = compare_holdings(old_df, new_df)
+        print(f"Comparison done: {len(comparison_df)} rows")
+
+        metrics = calculate_portfolio_metrics(old_df, new_df, comparison_df)
+        print("Metrics calculated")
+
+        # --- Step 3: Sector enrichment ---
+        print("Starting sector enrichment for old")
+        old_enriched = enrich_with_sectors(clean_holdings(old_df), headers)
+        print(f"Old sector enrichment done: {len(old_enriched)} rows")
+
+        print("Starting sector enrichment for new")
+        new_enriched = enrich_with_sectors(clean_holdings(new_df), headers)
+        print(f"New sector enrichment done: {len(new_enriched)} rows")
+
+        sector_comparison = compare_sectors(old_enriched, new_enriched)
+        print("Sector comparison done")
+
+        # --- Step 4: Build LLM context ---
+        print("Building Gemini context")
+        context = prepare_context(old_enriched, new_enriched, comparison_df, sector_comparison, metrics)
+        print("Context built")
+
+        # --- Step 5: Query Gemini ---
+        print("Calling Gemini")
+        answer = query_gemini(req.question, context, req.gemini_api_key)
+        print("Gemini response received")
+
+        # Strip DataFrame objects from metrics before returning
+        summary = {
+            k: v for k, v in metrics.items()
+            if not isinstance(v, (pd.DataFrame, pd.Series))
+        }
+        print("Summary prepared")
+        print("=== /analyze completed successfully ===")
+
+        return AnalyzeResponse(
+            answer=answer,
+            portfolio_summary=summary,
+            cik=req.cik,
+            period_prev=req.period_prev,
+            period_curr=req.period_curr,
         )
 
-    headers = make_headers(req.sec_email)
-
-    # --- Step 1: Extract holdings ---
-    old_df = extract_13f_data(req.cik, req.period_prev, headers)
-    time.sleep(1)
-    new_df = extract_13f_data(req.cik, req.period_curr, headers)
-
-    # --- Step 2: Compare + metrics ---
-    comparison_df = compare_holdings(old_df, new_df)
-    metrics = calculate_portfolio_metrics(old_df, new_df, comparison_df)
-
-    # --- Step 3: Sector enrichment ---
-    old_enriched = enrich_with_sectors(clean_holdings(old_df), headers)
-    new_enriched = enrich_with_sectors(clean_holdings(new_df), headers)
-    sector_comparison = compare_sectors(old_enriched, new_enriched)
-
-    # --- Step 4: Build LLM context ---
-    context = prepare_context(old_enriched, new_enriched, comparison_df, sector_comparison, metrics)
-
-    # --- Step 5: Query Gemini ---
-    try:
-        answer = query_gemini(req.question, context, req.gemini_api_key)
+    except HTTPException as e:
+        print(f"HTTPException: {e.status_code} - {e.detail}")
+        raise e
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Gemini error: {str(e)}")
-
-    # Strip DataFrame objects from metrics before returning (not JSON-serialisable)
-    summary = {k: v for k, v in metrics.items()
-               if not isinstance(v, (pd.DataFrame, pd.Series))}
-
-    return AnalyzeResponse(
-        answer=answer,
-        portfolio_summary=summary,
-        cik=req.cik,
-        period_prev=req.period_prev,
-        period_curr=req.period_curr,
-    )
+        print(f"Unhandled error in /analyze: {repr(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {repr(e)}")
 
 
 # ---------------------------------------------------------------------------
