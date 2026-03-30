@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 
 const exampleQuestions = [
@@ -40,6 +40,14 @@ function App() {
   const [response, setResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [showExamples, setShowExamples] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -131,13 +139,25 @@ function App() {
     setLoading(false);
   };
 
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: isMobile ? "11px 12px" : "12px 14px",
+    borderRadius: "10px",
+    border: "1px solid #cbd5e1",
+    fontSize: isMobile ? "15px" : "14px",
+    boxSizing: "border-box",
+    backgroundColor: "#ffffff",
+    color: "#0f172a",
+    WebkitTextFillColor: "#0f172a",
+  };
+
   return (
     <div
       style={{
         minHeight: "100vh",
         width: "100%",
         background: "#f5f7fb",
-        padding: "20px",
+        padding: isMobile ? "12px" : "20px",
         boxSizing: "border-box",
         fontFamily: "Arial, sans-serif",
       }}
@@ -148,7 +168,7 @@ function App() {
           maxWidth: "1800px",
           margin: "0 auto",
           display: "grid",
-          gridTemplateColumns: "1.35fr 0.65fr",
+          gridTemplateColumns: isMobile ? "1fr" : "1.35fr 0.65fr",
           gap: "20px",
           alignItems: "start",
         }}
@@ -157,7 +177,7 @@ function App() {
           style={{
             background: "#ffffff",
             borderRadius: "18px",
-            padding: "28px",
+            padding: isMobile ? "18px" : "28px",
             boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
           }}
         >
@@ -165,18 +185,123 @@ function App() {
             style={{
               marginTop: 0,
               marginBottom: "20px",
-              fontSize: "38px",
-              lineHeight: 1.05,
+              fontSize: isMobile ? "26px" : "38px",
+              lineHeight: 1.1,
               textAlign: "center",
+              color: "#0f172a",
             }}
           >
             13F Portfolio Analysis Agent
           </h1>
 
+          {isMobile && (
+            <div style={{ marginBottom: "16px" }}>
+              <button
+                onClick={() => setShowExamples(!showExamples)}
+                style={{
+                  width: "100%",
+                  background: "#eff6ff",
+                  color: "#1e3a8a",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: "10px",
+                  padding: "12px 14px",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                {showExamples ? "Hide Example Questions" : "Show Example Questions"}
+              </button>
+            </div>
+          )}
+
+          {isMobile && showExamples && (
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "14px",
+                border: "1px solid #e2e8f0",
+                padding: "16px",
+                marginBottom: "18px",
+              }}
+            >
+              <h2
+                style={{
+                  marginTop: 0,
+                  marginBottom: "10px",
+                  textAlign: "center",
+                  fontSize: "20px",
+                }}
+              >
+                Example Questions
+              </h2>
+
+              <div
+                style={{
+                  color: "#475569",
+                  marginBottom: "14px",
+                  lineHeight: 1.5,
+                  textAlign: "center",
+                  fontSize: "14px",
+                }}
+              >
+                Click any example below to populate the question box.
+              </div>
+
+              <div
+                style={{
+                  marginBottom: "14px",
+                  padding: "12px 14px",
+                  background: "#eff6ff",
+                  border: "1px solid #bfdbfe",
+                  borderRadius: "10px",
+                  color: "#1e3a8a",
+                  fontSize: "14px",
+                  lineHeight: 1.5,
+                }}
+              >
+                <strong>How to get a Gemini API key:</strong>
+                <br />
+                Open Google AI Studio, create an API key, and paste it into the field above.
+              </div>
+
+              <div style={{ display: "grid", gap: "10px" }}>
+                {exampleQuestions.map((item, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setQuestion(item);
+                      setShowExamples(false);
+                    }}
+                    style={{
+                      textAlign: "left",
+                      background: "#f8fafc",
+                      border: "1px solid #dbeafe",
+                      borderRadius: "10px",
+                      padding: "12px 14px",
+                      cursor: "pointer",
+                      color: "#0f172a",
+                      lineHeight: 1.4,
+                      fontSize: "14px",
+                    }}
+                  >
+                    {index + 1}. {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div style={{ display: "grid", gap: "18px" }}>
             <div>
               <label
-                style={{ display: "block", marginBottom: "6px", fontWeight: 600 }}
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontWeight: 600,
+                  fontSize: isMobile ? "15px" : "16px",
+                  color: "#475569",
+                }}
               >
                 Gemini API Key
               </label>
@@ -187,17 +312,23 @@ function App() {
                 onChange={(e) => setGeminiApiKey(e.target.value)}
                 style={inputStyle}
               />
-              <div style={helperTextStyle}>
+              <div style={helperTextStyle(isMobile)}>
                 Get a Gemini API key from Google AI Studio and paste it here.
               </div>
-              <div style={helperTextStyle}>
+              <div style={helperTextStyle(isMobile)}>
                 Your API key is used only for this request and is not stored.
               </div>
             </div>
 
             <div>
               <label
-                style={{ display: "block", marginBottom: "6px", fontWeight: 600 }}
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontWeight: 600,
+                  fontSize: isMobile ? "15px" : "16px",
+                  color: "#475569",
+                }}
               >
                 Email Address
               </label>
@@ -212,7 +343,13 @@ function App() {
 
             <div>
               <label
-                style={{ display: "block", marginBottom: "6px", fontWeight: 600 }}
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontWeight: 600,
+                  fontSize: isMobile ? "15px" : "16px",
+                  color: "#475569",
+                }}
               >
                 Company's CIK
               </label>
@@ -225,11 +362,21 @@ function App() {
             </div>
 
             <div
-              style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                gap: "12px",
+              }}
             >
               <div>
                 <label
-                  style={{ display: "block", marginBottom: "6px", fontWeight: 600 }}
+                  style={{
+                    display: "block",
+                    marginBottom: "6px",
+                    fontWeight: 600,
+                    fontSize: isMobile ? "15px" : "16px",
+                    color: "#475569",
+                  }}
                 >
                   Previous Period
                 </label>
@@ -249,7 +396,13 @@ function App() {
 
               <div>
                 <label
-                  style={{ display: "block", marginBottom: "6px", fontWeight: 600 }}
+                  style={{
+                    display: "block",
+                    marginBottom: "6px",
+                    fontWeight: 600,
+                    fontSize: isMobile ? "15px" : "16px",
+                    color: "#475569",
+                  }}
                 >
                   Current Period
                 </label>
@@ -270,7 +423,13 @@ function App() {
 
             <div>
               <label
-                style={{ display: "block", marginBottom: "6px", fontWeight: 600 }}
+                style={{
+                  display: "block",
+                  marginBottom: "6px",
+                  fontWeight: 600,
+                  fontSize: isMobile ? "15px" : "16px",
+                  color: "#475569",
+                }}
               >
                 Question
               </label>
@@ -278,11 +437,11 @@ function App() {
                 placeholder="Ask a question about the portfolio"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
-                rows={4}
+                rows={isMobile ? 5 : 4}
                 style={{
                   ...inputStyle,
                   resize: "vertical",
-                  minHeight: "100px",
+                  minHeight: isMobile ? "120px" : "100px",
                 }}
               />
             </div>
@@ -311,10 +470,11 @@ function App() {
                 color: "#ffffff",
                 border: "none",
                 borderRadius: "10px",
-                padding: "14px 18px",
+                padding: isMobile ? "14px 16px" : "14px 18px",
                 fontSize: "16px",
                 fontWeight: 600,
                 cursor: "pointer",
+                width: "100%",
               }}
             >
               {loading ? "Running..." : "Run Analysis"}
@@ -324,13 +484,22 @@ function App() {
           <div
             style={{
               marginTop: "24px",
-              padding: "22px",
+              padding: isMobile ? "18px" : "22px",
               borderRadius: "12px",
               background: "#f8fafc",
               border: "1px solid #e2e8f0",
             }}
           >
-            <h2 style={{ marginTop: 0, marginBottom: "12px" }}>Answer</h2>
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: "12px",
+                fontSize: isMobile ? "28px" : "32px",
+                textAlign: isMobile ? "left" : "center",
+              }}
+            >
+              Answer
+            </h2>
 
             {!response && (
               <div style={{ color: "#64748b", lineHeight: 1.6 }}>
@@ -343,7 +512,9 @@ function App() {
                 style={{
                   lineHeight: 1.8,
                   color: "#0f172a",
-                  fontSize: "16px",
+                  fontSize: isMobile ? "15px" : "16px",
+                  overflowWrap: "break-word",
+                  wordBreak: "break-word",
                 }}
               >
                 <ReactMarkdown>{response.answer}</ReactMarkdown>
@@ -352,90 +523,83 @@ function App() {
           </div>
         </div>
 
-        <div
-          style={{
-            background: "#ffffff",
-            borderRadius: "18px",
-            padding: "24px",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
-            position: "sticky",
-            top: "20px",
-            maxHeight: "calc(100vh - 40px)",
-            overflowY: "auto",
-          }}
-        >
-          <h2 style={{ marginTop: 0, marginBottom: "10px", textAlign: "center" }}>
-            Example Questions
-          </h2>
+        {!isMobile && (
           <div
             style={{
-              color: "#475569",
-              marginBottom: "16px",
-              lineHeight: 1.5,
-              textAlign: "center",
+              background: "#ffffff",
+              borderRadius: "18px",
+              padding: "24px",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+              position: "sticky",
+              top: "20px",
+              maxHeight: "calc(100vh - 40px)",
+              overflowY: "auto",
             }}
           >
-            Click any example below to populate the question box.
-          </div>
+            <h2 style={{ marginTop: 0, marginBottom: "10px", textAlign: "center" }}>
+              Example Questions
+            </h2>
+            <div
+              style={{
+                color: "#475569",
+                marginBottom: "16px",
+                lineHeight: 1.5,
+                textAlign: "center",
+              }}
+            >
+              Click any example below to populate the question box.
+            </div>
 
-          <div
-            style={{
-              marginBottom: "18px",
-              padding: "12px 14px",
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              borderRadius: "10px",
-              color: "#1e3a8a",
-              fontSize: "14px",
-              lineHeight: 1.5,
-            }}
-          >
-            <strong>How to get a Gemini API key:</strong>
-            <br />
-            Open Google AI Studio, create an API key, and paste it into the field
-            on the left.
-          </div>
+            <div
+              style={{
+                marginBottom: "18px",
+                padding: "12px 14px",
+                background: "#eff6ff",
+                border: "1px solid #bfdbfe",
+                borderRadius: "10px",
+                color: "#1e3a8a",
+                fontSize: "14px",
+                lineHeight: 1.5,
+              }}
+            >
+              <strong>How to get a Gemini API key:</strong>
+              <br />
+              Open Google AI Studio, create an API key, and paste it into the field
+              on the left.
+            </div>
 
-          <div style={{ display: "grid", gap: "10px" }}>
-            {exampleQuestions.map((item, index) => (
-              <button
-                key={index}
-                onClick={() => setQuestion(item)}
-                style={{
-                  textAlign: "left",
-                  background: "#f8fafc",
-                  border: "1px solid #dbeafe",
-                  borderRadius: "10px",
-                  padding: "12px 14px",
-                  cursor: "pointer",
-                  color: "#0f172a",
-                  lineHeight: 1.4,
-                }}
-              >
-                {index + 1}. {item}
-              </button>
-            ))}
+            <div style={{ display: "grid", gap: "10px" }}>
+              {exampleQuestions.map((item, index) => (
+                <button
+                  key={index}
+                  onClick={() => setQuestion(item)}
+                  style={{
+                    textAlign: "left",
+                    background: "#f8fafc",
+                    border: "1px solid #dbeafe",
+                    borderRadius: "10px",
+                    padding: "12px 14px",
+                    cursor: "pointer",
+                    color: "#0f172a",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {index + 1}. {item}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "12px 14px",
-  borderRadius: "10px",
-  border: "1px solid #cbd5e1",
-  fontSize: "14px",
-  boxSizing: "border-box",
-  background: "#ffffff",
-};
-
-const helperTextStyle: React.CSSProperties = {
+const helperTextStyle = (isMobile: boolean): React.CSSProperties => ({
   marginTop: "6px",
-  fontSize: "12px",
+  fontSize: isMobile ? "13px" : "12px",
   color: "#64748b",
-};
+  lineHeight: 1.5,
+});
 
 export default App;
