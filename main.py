@@ -28,8 +28,11 @@ app = FastAPI(title="13F Portfolio Analysis Agent", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # Lock this down to your Lovable domain in prod
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:5173",
+        "https://portfolio-analysis-ai-agent.vercel.app",
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -632,6 +635,12 @@ def analyze(req: AnalyzeRequest):
         print(f"period_curr: {req.period_curr}")
         print(f"question: {req.question}")
 
+        if len(req.question.strip()) < 5:
+            raise HTTPException(status_code=400, detail="Question is too short")
+
+        if not req.gemini_api_key.startswith("AIza"):
+            raise HTTPException(status_code=400, detail="Invalid Gemini API key format")
+
         # Validate date ordering
         if req.period_prev >= req.period_curr:
             raise HTTPException(
@@ -703,8 +712,20 @@ def analyze(req: AnalyzeRequest):
         print(f"HTTPException: {e.status_code} - {e.detail}")
         raise e
     except Exception as e:
-        print(f"Unhandled error in /analyze: {repr(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {repr(e)}")
+        error_str = str(e)
+
+        print(f"Unhandled error in /analyze: {error_str}")
+
+        if "ResourceExhausted" in error_str:
+            raise HTTPException(
+                status_code=429,
+                detail="Gemini API quota exceeded. Please wait and try again or use another API key."
+            )
+
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong while processing your request. Please try again."
+        )
 
 
 # ---------------------------------------------------------------------------
