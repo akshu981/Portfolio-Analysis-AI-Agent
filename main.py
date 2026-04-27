@@ -24,6 +24,10 @@ import google.generativeai as genai
 # App setup
 # ---------------------------------------------------------------------------
 
+# --- Cache setup ---
+analysis_cache = {}
+CACHE_TTL = 86400  # 24 hours
+
 app = FastAPI(title="13F Portfolio Analysis Agent", version="1.0.0")
 
 app.add_middleware(
@@ -623,6 +627,29 @@ def validate_key(payload: dict):
 
 
 # ---------------------------------------------------------------------------
+# Cache status endpoint (debug)
+# ---------------------------------------------------------------------------
+
+@app.get("/cache-status")
+def cache_status():
+    now = time.time()
+    entries = []
+    for key, val in analysis_cache.items():
+        age_seconds = int(now - val["timestamp"])
+        expires_in = max(0, CACHE_TTL - age_seconds)
+        entries.append({
+            "key": key,
+            "age_seconds": age_seconds,
+            "expires_in_seconds": expires_in,
+        })
+    return {
+        "total_entries": len(analysis_cache),
+        "cache_ttl_seconds": CACHE_TTL,
+        "entries": entries,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main endpoint
 # ---------------------------------------------------------------------------
 
@@ -638,9 +665,6 @@ def analyze(req: AnalyzeRequest):
         if len(req.question.strip()) < 5:
             raise HTTPException(status_code=400, detail="Question is too short")
 
-        if not req.gemini_api_key.startswith("AIza"):
-            raise HTTPException(status_code=400, detail="Invalid Gemini API key format")
-
         # Validate date ordering
         if req.period_prev >= req.period_curr:
             raise HTTPException(
@@ -649,55 +673,76 @@ def analyze(req: AnalyzeRequest):
             )
 
         headers = make_headers(req.sec_email)
-        print("Headers created")
 
-        # --- Step 1: Extract holdings ---
-        print("Starting old period extraction")
-        old_df = extract_13f_data(req.cik, req.period_prev, headers)
-        print(f"Old period extraction done: {len(old_df)} rows")
+        # --- Cache key: includes email for per-user isolation ---
+        cache_key = f"{req.cik}_{req.period_prev}_{req.period_curr}_{req.sec_email}"
 
-        time.sleep(1)
+        context = None
+        metrics = None
 
-        print("Starting current period extraction")
-        new_df = extract_13f_data(req.cik, req.period_curr, headers)
-        print(f"Current period extraction done: {len(new_df)} rows")
+        # --- Check cache ---
+        if cache_key in analysis_cache:
+            cached = analysis_cache[cache_key]
+            if time.time() - cached["timestamp"] < CACHE_TTL:
+                print(f"Cache HIT for key: {cache_key}")
+                context = cached["context"]
+                metrics = cached["metrics"]
+            else:
+                print(f"Cache EXPIRED for key: {cache_key}")
+                del analysis_cache[cache_key]
 
-        # --- Step 2: Compare + metrics ---
-        print("Starting comparison")
-        comparison_df = compare_holdings(old_df, new_df)
-        print(f"Comparison done: {len(comparison_df)} rows")
+        # --- Compute if not cached ---
+        if context is None:
+            print("Cache MISS — fetching from SEC...")
 
-        metrics = calculate_portfolio_metrics(old_df, new_df, comparison_df)
-        print("Metrics calculated")
+            # Step 1: Extract holdings
+            print("Extracting old period holdings...")
+            old_df = extract_13f_data(req.cik, req.period_prev, headers)
+            print(f"Old period: {len(old_df)} rows")
 
-        # --- Step 3: Sector enrichment ---
-        print("Starting sector enrichment for old")
-        old_enriched = enrich_with_sectors(clean_holdings(old_df), headers)
-        print(f"Old sector enrichment done: {len(old_enriched)} rows")
+            time.sleep(1)
 
-        print("Starting sector enrichment for new")
-        new_enriched = enrich_with_sectors(clean_holdings(new_df), headers)
-        print(f"New sector enrichment done: {len(new_enriched)} rows")
+            print("Extracting current period holdings...")
+            new_df = extract_13f_data(req.cik, req.period_curr, headers)
+            print(f"Current period: {len(new_df)} rows")
 
-        sector_comparison = compare_sectors(old_enriched, new_enriched)
-        print("Sector comparison done")
+            # Step 2: Compare + metrics
+            print("Comparing holdings...")
+            comparison_df = compare_holdings(old_df, new_df)
+            metrics = calculate_portfolio_metrics(old_df, new_df, comparison_df)
+            print("Metrics calculated")
 
-        # --- Step 4: Build LLM context ---
-        print("Building Gemini context")
-        context = prepare_context(old_enriched, new_enriched, comparison_df, sector_comparison, metrics)
-        print("Context built")
+            # Step 3: Sector enrichment
+            print("Enriching with sectors...")
+            old_enriched = enrich_with_sectors(clean_holdings(old_df), headers)
+            new_enriched = enrich_with_sectors(clean_holdings(new_df), headers)
+            sector_comparison = compare_sectors(old_enriched, new_enriched)
+            print("Sector enrichment done")
 
-        # --- Step 5: Query Gemini ---
-        print("Calling Gemini")
+            # Step 4: Build context
+            print("Building context...")
+            context = prepare_context(old_enriched, new_enriched, comparison_df, sector_comparison, metrics)
+            print("Context built")
+
+            # --- Store in cache ---
+            analysis_cache[cache_key] = {
+                "context": context,
+                "metrics": metrics,
+                "timestamp": time.time(),
+            }
+            print(f"Cached under key: {cache_key}")
+
+        # Step 5: Query Gemini (always fresh)
+        print("Calling Gemini...")
         answer = query_gemini(req.question, context, req.gemini_api_key)
         print("Gemini response received")
 
-        # Strip DataFrame objects from metrics before returning
+        # Strip non-serializable objects from metrics
         summary = {
             k: v for k, v in metrics.items()
             if not isinstance(v, (pd.DataFrame, pd.Series))
         }
-        print("Summary prepared")
+
         print("=== /analyze completed successfully ===")
 
         return AnalyzeResponse(
@@ -713,7 +758,6 @@ def analyze(req: AnalyzeRequest):
         raise e
     except Exception as e:
         error_str = str(e)
-
         print(f"Unhandled error in /analyze: {error_str}")
 
         if "ResourceExhausted" in error_str:
