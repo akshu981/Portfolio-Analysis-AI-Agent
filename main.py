@@ -665,9 +665,6 @@ def analyze(req: AnalyzeRequest):
         if len(req.question.strip()) < 5:
             raise HTTPException(status_code=400, detail="Question is too short")
 
-        if not req.gemini_api_key.startswith("AIza"):
-            raise HTTPException(status_code=400, detail="Invalid Gemini API key format")
-
         # Validate date ordering
         if req.period_prev >= req.period_curr:
             raise HTTPException(
