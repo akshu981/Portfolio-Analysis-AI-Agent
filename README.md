@@ -2,6 +2,6 @@ This project automates the analysis of institutional investment activity by buil
 
 **[Try the Live Application →](https://portfolio-analysis-ai-agent.vercel.app/)**
 
-Starting as a prototype in Jupyter notebook, the application is productionized as a full-stack system with a React (JavaScript) frontend and a deployed backend, enabling users to input a company and ask ad-hoc questions about investment behavior. I leveraged Google Gemini 2.5 Flash for cost-efficient LLM integration. The pipeline includes data cleaning, deduplication, and options filtering to ensure accuracy, and is designed to scale as a **decision-support tool** for investors, analysts, and financial journalists.
+Starting as a [prototype](https://github.com/akshu981/Portfolio-Analysis-AI-Agent/blob/main/Portfolio%20Analysis%20AI%20Agent.ipynb) in Jupyter notebook, the application is productionized as a full-stack system with a React (JavaScript) frontend and a deployed backend, enabling users to input a company and ask ad-hoc questions about investment behavior. I leveraged Google Gemini 2.5 Flash for cost-efficient LLM integration. The pipeline includes data cleaning, deduplication, and options filtering to ensure accuracy, and is designed to scale as a **decision-support tool** for investors, analysts, and financial journalists.
 
 ![Summary Table](Summary_Table.svg)
